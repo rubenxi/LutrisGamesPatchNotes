@@ -8,11 +8,12 @@ With this script you don't need to go one by one checking all the updates for al
 - requests
 - beautifulsoup4
 - lxml
+- python3-tk
 
 ```
 pip install -r requirements.txt
 ```
 or
 ```
-pip install requests beautifulsoup4 lxml
+pip install requests beautifulsoup4 lxml python3-tk
 ```

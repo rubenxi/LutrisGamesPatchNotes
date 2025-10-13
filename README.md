@@ -9,6 +9,6 @@ With this script you don't need to go one by one checking all the updates for al
 - beautifulsoup4
 - lxml
 
-'''
+```
 pip install requests beautifulsoup4 lxml
-'''
+```

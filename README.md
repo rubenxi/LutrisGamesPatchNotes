@@ -1,7 +1,11 @@
 # LutrisGamesPatchNotes
-Python script that gets a list of all the patch notes of all your games in your Lutris database.
+Python script with a simple interface that gets a list of all the patch notes of all your games in your Lutris database.
 Useful to stay up to date with Steam games in Lutris.
 With this script you don't need to go one by one checking all the updates for all your Lutris games.
+You can choose a game from the Lutris list loaded in the interface to filter only updates for that game.
+The updates list is also written to a txt file.
+<img width="1767" height="1486" alt="image" src="https://github.com/user-attachments/assets/4227f8fd-eb42-416d-98d2-5426ee49f424" />
+
 
 ## Requirements
 - Python3
@@ -17,3 +21,9 @@ or
 ```
 pip install requests beautifulsoup4 lxml python3-tk
 ```
+## TODO
+- Better interface
+- Clickable links
+- Pictures from links
+- Exclude games
+- Don't update

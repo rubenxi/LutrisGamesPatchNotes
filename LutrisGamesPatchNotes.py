@@ -9,6 +9,7 @@ import time
 import tkinter as tk
 from tkinter import scrolledtext, ttk
 import os
+import re
 
 db_path = os.path.expanduser("~/.local/share/lutris/pga.db")
 
@@ -20,6 +21,51 @@ headers = {
 
 entries = []
 games = []
+unavailables_known = []
+
+def extract_game_id_and_name(file_path="Updates.txt"):
+    id_game_dict = {}
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+        game_name = ""
+        game_id = ""
+
+        for line in lines:
+            line = line.strip()  
+            if line.startswith("ID:"):
+                game_id = line.split("ID:")[1].strip()
+            elif line.startswith("Game:"):
+                game_name = line.split("Game:")[1].strip()
+                if game_id and game_name:
+                    id_game_dict[game_id] = game_name
+                    game_id = "" 
+                    game_name = "" 
+
+    return id_game_dict
+
+def extract_unavailable_games(file_path="Updates.txt"):
+    unavailable_games = []
+
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+        for line in reversed(lines):
+            line = line.strip() 
+            if line.startswith("Unavailable:"):
+                unavailable_game = line.split("Unavailable:")[1].strip()
+                unavailable_games.append(normalize(unavailable_game))
+
+    return unavailable_games
+
+def get_game_id(game_name, id_game_dict):
+    game_name = game_name.lower()
+
+    for game_id, name in id_game_dict.items():
+        if name.lower() == game_name:
+            return game_id
+
+    return None
 
 def parse_date(date_str):
     return datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
@@ -33,7 +79,14 @@ def extract_list_lutris():
         rows = cursor.fetchall()
         for row in rows:
             games.append(row[0])
-            find_first_search_result(row[0])
+            game_id = get_game_id(row[0], id_game_dict)
+            if not game_id and normalize(row[0]) not in unavailables_known:
+                game_id = find_first_search_result(row[0])
+            if game_id is not None:
+                extract_info_rss(game_id, row[0])
+            elif normalize(row[0]) not in unavailables_known:
+                unavailables_known.append(normalize(row[0]))
+            
     except sqlite3.Error as e:
         print("Error querying the database:", e)
     conn.close()
@@ -48,15 +101,18 @@ def find_first_search_result(game):
         app_id = a.get("href").split('/')[4]
         if is_similar_name(str(game), a.get_text(strip=True)):
             print(str(game) + " -> ", a.get_text(strip=True))
-            extract_info_rss(app_id, game)
+            return app_id
         else:
             print("Could not find " + str(game))
+            return None
     else:
         print("Could not find " + str(game))
+        return None
 
 def extract_info_rss(game_id, game):
     rss_url = f"https://steamdb.info/api/PatchnotesRSS/?appid={game_id}"
     while True:
+        time.sleep(1)
         try:
             response = requests.get(rss_url, headers=headers, timeout=10)
             if response.status_code == 429:
@@ -80,6 +136,7 @@ def extract_info_rss(game_id, game):
                 'date': item.find('pubDate').text,
                 'image': item.find('media:thumbnail', namespaces).attrib['url'],
                 'link': item.find('link').text,
+                'id': game_id,
                 'game': game
             })
     except Exception as e:
@@ -94,8 +151,11 @@ def print_sorted():
             file.write(f"Date: {entry['date']}\n")
             file.write(f"Image: {entry['image']}\n")
             file.write(f"Link: {entry['link']}\n")
+            file.write(f"ID: {entry['id']}\n")
             file.write(f"Game: {entry['game']}\n")
             file.write('---\n')
+        for unavailable in unavailables_known:
+            file.write(f"Unavailable: {unavailable}\n")
 
 def normalize(text):
     return ''.join(text.lower().split())
@@ -138,24 +198,29 @@ def decorate_entry(entry):
         f"{'─' * 60}\n"
     )
 
-def load_updates(selected_game=None):
+def load_updates(selected_game=None, filter_text=""):
     try:
         with open("Updates.txt", "r", encoding="utf-8") as file:
             content = file.read()
             entries_raw = content.split('---\n')
             normalized_selection = selected_game.strip().lower() if selected_game else None
+            filter_text = filter_text.lower().strip()
+
             decorated_entries = []
             for entry in entries_raw:
                 if not entry.strip():
                     continue
+
                 if not selected_game or selected_game == "All Games":
-                    decorated_entries.append(decorate_entry(entry))
+                    if filter_text in entry.lower():
+                        decorated_entries.append(decorate_entry(entry))
                 else:
                     for line in entry.splitlines():
                         if line.startswith("Game:"):
                             game_name = line[5:].strip().lower()
                             if normalized_selection == game_name:
-                                decorated_entries.append(decorate_entry(entry))
+                                if filter_text in entry.lower():
+                                    decorated_entries.append(decorate_entry(entry))
                                 break
             final_content = '\n'.join(decorated_entries)
             text_area.delete(1.0, tk.END)
@@ -166,8 +231,14 @@ def load_updates(selected_game=None):
 
 def on_game_selected(*args):
     selected_game = selected_game_var.get()
-    load_updates(selected_game)
+    load_updates(selected_game, filter_entry.get())
 
+def on_filter_changed(*args):
+    selected_game = selected_game_var.get()
+    load_updates(selected_game, filter_entry.get())
+
+unavailables_known = extract_unavailable_games()
+id_game_dict = extract_game_id_and_name()
 extract_list_lutris()
 print_sorted()
 
@@ -187,12 +258,16 @@ selected_game_var.trace_add("write", on_game_selected)
 
 dropdown = ttk.OptionMenu(root, selected_game_var, "All Games", *games)
 dropdown.config(width=40)
-dropdown.pack(pady=10)
+dropdown.pack(pady=10, side=tk.TOP, padx=10)
+
+filter_entry = tk.Entry(root, font=("Consolas", 18))
+filter_entry.bind("<KeyRelease>", on_filter_changed)
+filter_entry.pack(pady=10, side=tk.TOP, padx=10)
 
 text_area = scrolledtext.ScrolledText(
     root,
     wrap=tk.WORD,
-    font=("Consolas", 11),
+    font=("Consolas", 15),
     bg="#1e1e1e",
     fg="#d4d4d4",
     insertbackground="white",

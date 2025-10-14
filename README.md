@@ -11,6 +11,8 @@ You can choose a game from the Lutris list loaded in the interface to filter onl
 
 The updates list is also written to a txt file.
 
+The script uses scraping to get information from Steam and SteamDB.
+
 ## Requirements
 - Python3
 - requests

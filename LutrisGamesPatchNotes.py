@@ -2,14 +2,13 @@ import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 import sqlite3
-from lxml import html
 from datetime import datetime
 import difflib
 import time
 import tkinter as tk
 from tkinter import scrolledtext, ttk
 import os
-import re
+import random
 
 db_path = os.path.expanduser("~/.local/share/lutris/pga.db")
 
@@ -21,6 +20,7 @@ headers = {
 
 entries = []
 games = []
+games_ids = []
 unavailables_known = []
 
 def extract_game_id_and_name(file_path="Updates.txt"):
@@ -71,7 +71,6 @@ def parse_date(date_str):
     return datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
 
 def extract_list_lutris():
-    global games
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     try:
@@ -83,7 +82,9 @@ def extract_list_lutris():
             if not game_id and normalize(row[0]) not in unavailables_known:
                 game_id = find_first_search_result(row[0])
             if game_id is not None:
-                extract_info_rss(game_id, row[0])
+                if game_id not in games_ids:
+                    games_ids.append(game_id)
+                    extract_info_rss(game_id, row[0])
             elif normalize(row[0]) not in unavailables_known:
                 unavailables_known.append(normalize(row[0]))
             
@@ -112,12 +113,12 @@ def find_first_search_result(game):
 def extract_info_rss(game_id, game):
     rss_url = f"https://steamdb.info/api/PatchnotesRSS/?appid={game_id}"
     while True:
-        time.sleep(1)
+        time.sleep(random.uniform(1, 3))
         try:
             response = requests.get(rss_url, headers=headers, timeout=10)
             if response.status_code == 429:
                 print(f"[{game_id}] Too Many Requests. Retrying...")
-                time.sleep(10)
+                time.sleep(random.uniform(5, 10))
                 continue
             response.raise_for_status()
             break
@@ -134,8 +135,7 @@ def extract_info_rss(game_id, game):
                 'title': item.find('title').text,
                 'description': item.find('description').text,
                 'date': item.find('pubDate').text,
-                'image': item.find('media:thumbnail', namespaces).attrib['url'],
-                'link': item.find('link').text,
+                'link': item.find('link').text.split('?',1)[0],
                 'id': game_id,
                 'game': game
             })
@@ -149,7 +149,6 @@ def print_sorted():
             file.write(f"Title: {entry['title']}\n")
             file.write(f"Description: {entry['description']}\n")
             file.write(f"Date: {entry['date']}\n")
-            file.write(f"Image: {entry['image']}\n")
             file.write(f"Link: {entry['link']}\n")
             file.write(f"ID: {entry['id']}\n")
             file.write(f"Game: {entry['game']}\n")
@@ -188,17 +187,18 @@ def decorate_entry(entry):
             key, value = line.split(': ', 1)
             data[key.lower()] = value.strip()
 
-    return (
-        f"🎮 [Game] {data.get('game', 'Unknown')}\n"
-        f"📝 [Title] {data.get('title', 'No title')}\n"
-        f"📅 [Date] {data.get('date', 'Unknown')}\n"
-        f"🖼️ [Image] {data.get('image', '')}\n"
-        f"🔗 [Link] {data.get('link', '')}\n"
-        f"📄 [Description]\n{data.get('description', '')}\n"
-        f"{'─' * 60}\n"
-    )
+    decorated_lines = [
+        ("🎮 [Game] " + data.get('game', 'Unknown') + "\n", None),
+        ("📝 [Title] " + data.get('title', 'No title') + "\n", "title"),
+        ("📅 [Date] " + data.get('date', 'Unknown') + "\n", "date"),
+        ("🔗 [Link] " + data.get('link', '').split('?',1)[0] + "\n", None),
+        ("📄 [Description]\n" + data.get('description', '') + "\n", None),
+        ("─" * 60 + "\n", None)
+    ]
+    return decorated_lines
 
 def load_updates(selected_game=None, filter_text=""):
+    text_area.configure(state='normal')
     try:
         with open("Updates.txt", "r", encoding="utf-8") as file:
             content = file.read()
@@ -207,27 +207,37 @@ def load_updates(selected_game=None, filter_text=""):
             filter_text = filter_text.lower().strip()
 
             decorated_entries = []
+            text_area.delete(1.0, tk.END)
             for entry in entries_raw:
                 if not entry.strip():
                     continue
 
                 if not selected_game or selected_game == "All Games":
                     if filter_text in entry.lower():
-                        decorated_entries.append(decorate_entry(entry))
+                        decorated_lines = decorate_entry(entry)
+                        for line, tag in decorated_lines:
+                            if tag:
+                                text_area.insert(tk.END, line, tag)
+                            else:
+                                text_area.insert(tk.END, line)
                 else:
                     for line in entry.splitlines():
                         if line.startswith("Game:"):
                             game_name = line[5:].strip().lower()
                             if normalized_selection == game_name:
                                 if filter_text in entry.lower():
-                                    decorated_entries.append(decorate_entry(entry))
+                                    decorated_lines = decorate_entry(entry)
+                                    for line, tag in decorated_lines:
+                                        if tag:
+                                            text_area.insert(tk.END, line, tag)
+                                        else:
+                                            text_area.insert(tk.END, line)
                                 break
-            final_content = '\n'.join(decorated_entries)
-            text_area.delete(1.0, tk.END)
-            text_area.insert(tk.END, final_content if final_content.strip() else "⚠️ No updates found for selected game.")
+        text_area.configure(state='disabled')
     except FileNotFoundError:
         text_area.delete(1.0, tk.END)
         text_area.insert(tk.END, "❌ Updates.txt not found.")
+    text_area.configure(state='disabled')
 
 def on_game_selected(*args):
     selected_game = selected_game_var.get()
@@ -237,6 +247,13 @@ def on_filter_changed(*args):
     selected_game = selected_game_var.get()
     load_updates(selected_game, filter_entry.get())
 
+if not os.path.exists("Updates.txt"):
+    with open("Updates.txt", 'w') as f:
+        pass  
+    print("Updates file created.")
+else:
+    print("File exists.")
+
 unavailables_known = extract_unavailable_games()
 id_game_dict = extract_game_id_and_name()
 extract_list_lutris()
@@ -244,7 +261,7 @@ print_sorted()
 
 root = tk.Tk()
 root.title("Game Updates Viewer")
-root.geometry("900x700")
+root.geometry("1200x1200")
 root.configure(bg="#1e1e1e")
 
 style = ttk.Style()
@@ -274,6 +291,9 @@ text_area = scrolledtext.ScrolledText(
     borderwidth=0
 )
 text_area.pack(expand=True, fill='both', padx=10, pady=10)
+text_area.tag_configure("title", foreground="blue")
+text_area.tag_configure("date", foreground="green")
+text_area.configure(cursor="arrow")
 
 load_updates()
 root.mainloop()

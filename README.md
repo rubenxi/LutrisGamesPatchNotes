@@ -1,7 +1,7 @@
 # LutrisGamesPatchNotes
 Python script with a simple interface that gets a list of all the patch notes of all your games in your Lutris database.
 
-<img width="1767" height="1486" alt="image" src="https://github.com/user-attachments/assets/4227f8fd-eb42-416d-98d2-5426ee49f424" />
+<img width="1895" height="2065" alt="image" src="https://github.com/user-attachments/assets/896fa773-ed0a-4e55-9e1e-7485d239a09b" />
 
 Useful to stay up to date with Steam games in Lutris.
 

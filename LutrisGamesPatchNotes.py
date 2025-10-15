@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import scrolledtext, ttk
 import os
 import random
+import re
+from tkinter import font
 
 db_path = os.path.expanduser("~/.local/share/lutris/pga.db")
 
@@ -59,10 +61,10 @@ def extract_unavailable_games(file_path="Updates.txt"):
     return unavailable_games
 
 def get_game_id(game_name, id_game_dict):
-    game_name = game_name.lower()
+    game_name = normalize(game_name.lower())
 
     for game_id, name in id_game_dict.items():
-        if name.lower() == game_name:
+        if normalize(name.lower()) == game_name:
             return game_id
 
     return None
@@ -157,7 +159,9 @@ def print_sorted():
             file.write(f"Unavailable: {unavailable}\n")
 
 def normalize(text):
-    return ''.join(text.lower().split())
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9]', '', text)
+    return text
 
 def is_similar_name(original, found, threshold=0.6):
     orig_norm = normalize(original)
@@ -192,7 +196,7 @@ def decorate_entry(entry):
         ("📝 [Title] " + data.get('title', 'No title') + "\n", "title"),
         ("📅 [Date] " + data.get('date', 'Unknown') + "\n", "date"),
         ("🔗 [Link] " + data.get('link', '').split('?',1)[0] + "\n", None),
-        ("📄 [Description]\n" + data.get('description', '') + "\n", None),
+        ("📄 [Description]\n" + data.get('description', '') + "\n", "description"),
         ("─" * 60 + "\n", None)
     ]
     return decorated_lines
@@ -293,6 +297,10 @@ text_area = scrolledtext.ScrolledText(
 text_area.pack(expand=True, fill='both', padx=10, pady=10)
 text_area.tag_configure("title", foreground="blue")
 text_area.tag_configure("date", foreground="green")
+bold_font = font.Font(text_area, text_area.cget("font"))
+bold_font.configure(weight="bold")
+text_area.tag_configure("description", font=bold_font)
+
 text_area.configure(cursor="arrow")
 
 load_updates()

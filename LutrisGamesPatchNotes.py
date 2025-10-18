@@ -243,8 +243,8 @@ def load_updates(selected_game=None, filter_text=""):
         text_area.insert(tk.END, "❌ Updates.txt not found.")
     text_area.configure(state='disabled')
 
-def on_game_selected(*args):
-    selected_game = selected_game_var.get()
+def on_game_selected(event):
+    selected_game = listbox.get(listbox.curselection()) if listbox.curselection() else None
     load_updates(selected_game, filter_entry.get())
 
 def on_filter_changed(*args):
@@ -256,7 +256,7 @@ if not os.path.exists("Updates.txt"):
         pass  
     print("Updates file created.")
 else:
-    print("File exists.")
+    print("Updates file found.")
 
 unavailables_known = extract_unavailable_games()
 id_game_dict = extract_game_id_and_name()
@@ -277,9 +277,28 @@ style.configure("TOptionMenu", background="#2e2e2e", foreground="white")
 selected_game_var = tk.StringVar(value="All Games")
 selected_game_var.trace_add("write", on_game_selected)
 
-dropdown = ttk.OptionMenu(root, selected_game_var, "All Games", *games)
-dropdown.config(width=40)
-dropdown.pack(pady=10, side=tk.TOP, padx=10)
+listbox_frame = tk.Frame(root, bg="#1e1e1e")  # Frame to hold Listbox and Scrollbar
+listbox_frame.pack(pady=10, side=tk.TOP, padx=10, fill=tk.X)
+
+listbox = tk.Listbox(
+    listbox_frame, 
+    font=("Consolas", 10),
+    bg="#2e2e2e", 
+    fg="#d4d4d4",
+    selectmode=tk.SINGLE,
+    height=4
+)
+
+scrollbar = tk.Scrollbar(listbox_frame, orient="vertical", command=listbox.yview)
+listbox.config(yscrollcommand=scrollbar.set)
+
+listbox.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+for game in games:
+    listbox.insert(tk.END, game)
+
+listbox.bind("<<ListboxSelect>>", on_game_selected)
 
 filter_entry = tk.Entry(root, font=("Consolas", 18))
 filter_entry.bind("<KeyRelease>", on_filter_changed)

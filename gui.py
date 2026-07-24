@@ -608,21 +608,19 @@ class UpdateGUI:
                 else "odd"
             )
 
+            description = update["description"].strip()
 
+            if description and not description.startswith("SteamDB Build"):
+                description = "✨ " + description
             self.tree.insert(
                 "",
                 "end",
                 iid=str(index),
                 tags=(tag,),
                 values=(
-
                     update["lutris_name"],
-
-                    self.format_date(
-                        update["update_date"]
-                    ),
-                    update["description"]
-
+                    self.format_date(update["update_date"]),
+                    description
                 )
             )
 

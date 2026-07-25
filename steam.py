@@ -118,28 +118,169 @@ def similar(
 
 
 
+# Steam's news content sometimes references clan-hosted images
+# using a {STEAM_CLAN_IMAGE} placeholder instead of a real URL.
+# This is the actual CDN base it stands in for.
+
+STEAM_CLAN_IMAGE_BASE = (
+    "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans"
+)
+
+
+# Marker left in cleaned notes text wherever an inline image was
+# found, so the GUI can render an actual picture there instead of
+# showing (or losing) the raw bbcode.
+
+NOTE_IMAGE_PATTERN = re.compile(
+    r"\[\[STEAM_NOTE_IMAGE:(.+?)\]\]"
+)
+
+
+
+def resolve_image_url(url):
+
+    url = url.strip().strip(
+        "\"'"
+    )
+
+
+    if url.startswith(
+        "{STEAM_CLAN_IMAGE}"
+    ):
+
+        url = (
+            STEAM_CLAN_IMAGE_BASE
+            +
+            url[len("{STEAM_CLAN_IMAGE}"):]
+        )
+
+
+    return url
+
+
+
+def _replace_image_tag(match):
+
+    src_attr = match.group(1)
+    inner = match.group(2)
+
+    raw_url = (
+        src_attr
+        or
+        inner
+        or
+        ""
+    ).strip()
+
+
+    if not raw_url:
+        return ""
+
+
+    url = resolve_image_url(
+        raw_url
+    )
+
+
+    return f"\n[[STEAM_NOTE_IMAGE:{url}]]\n"
+
+
+
+def extract_note_image_urls(notes):
+
+    """
+    Pull out every resolved image URL a cleaned notes string
+    references, so callers can pre-download/cache them.
+    """
+
+    if not notes:
+        return []
+
+
+    return NOTE_IMAGE_PATTERN.findall(
+        notes
+    )
+
+
+
 def clean_bbcode(text):
 
     if not text:
         return text
 
 
-    # Drop bbcode markup, keep the readable text.
+    # Real <br> tags occasionally show up inside the raw content -
+    # turn those into actual line breaks before anything else.
 
     text = re.sub(
-        r"\[img\][^\[]*\[/img\]",
+        r"<br\s*/?>",
+        "\n",
+        text,
+        flags=re.IGNORECASE
+    )
+
+
+    # Images (e.g. [img src="{STEAM_CLAN_IMAGE}/123/abc.jpg"] or
+    # [img]https://.../abc.jpg[/img]) get swapped for a resolved-URL
+    # marker instead of being deleted, so the GUI can render the
+    # actual picture in place.
+
+    text = re.sub(
+        r"\[img(?:\s+src=[\"']([^\"']+)[\"'])?\](?:(.*?)\[/img\])?",
+        _replace_image_tag,
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+
+    # Embedded videos aren't renderable here either.
+
+    text = re.sub(
+        r"\[previewyoutube[^\]]*\].*?\[/previewyoutube\]",
         "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+
+    # Keep link text readable, but fold the URL in next to it
+    # instead of just discarding it.
+
+    text = re.sub(
+        r"\[url=([^\]]+)\](.*?)\[/url\]",
+        lambda match: f"{match.group(2)} ({match.group(1)})",
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+
+    # Turn list items into their own bulleted line. Steam closes
+    # each item with [/*] (not [/list]) and often doesn't put a
+    # real line break between items, so without this every bullet
+    # ran together in one block and the [/*] markers leaked through
+    # as visible text.
+
+    text = re.sub(
+        r"\[\*\]",
+        "\n\u2022 ",
         text
     )
 
     text = re.sub(
-        r"\[url=[^\]]*\]",
+        r"\[/\*\]",
         "",
         text
     )
 
+
+    # Strip whatever bbcode tags are left over - bold, italic,
+    # headers, lists, quotes, etc. - attributes and all. The old
+    # version only matched a narrow set of characters inside the
+    # brackets, which is why tags with slashes/dots/braces (like
+    # image paths) were slipping through as visible text.
+
     text = re.sub(
-        r"\[/?[a-zA-Z0-9=\"' ]+\]",
+        r"\[/?[a-zA-Z0-9_]+(?:=[^\]]*)?\]",
         "",
         text
     )
@@ -149,18 +290,41 @@ def clean_bbcode(text):
     )
 
 
-    lines = [
+    # Keep single blank lines as paragraph breaks, but collapse
+    # runs of several blank lines down to one.
 
-        line.strip()
-        for line in text.splitlines()
-        if line.strip()
+    lines = []
 
-    ]
+    previous_blank = False
+
+
+    for raw_line in text.splitlines():
+
+        line = raw_line.strip()
+
+
+        if line:
+
+            lines.append(
+                line
+            )
+
+            previous_blank = False
+
+
+        elif not previous_blank:
+
+            lines.append(
+                ""
+            )
+
+            previous_blank = True
+
 
 
     return "\n".join(
         lines
-    )
+    ).strip()
 
 
 
@@ -227,6 +391,55 @@ def find_matching_news(
 
 
     return None
+
+
+
+def extract_rating(result):
+
+    """
+    Steam's search page embeds each game's review summary right on
+    the result row (a tooltip like "Very Positive<br>92% of the
+    ... reviews are positive"). No extra request needed - just
+    read it out of the page we already fetched.
+    """
+
+    review_el = result.find(
+        "span",
+        class_="search_review_summary"
+    )
+
+
+    if not review_el:
+        return None, None
+
+
+    tooltip = review_el.get(
+        "data-tooltip-html",
+        ""
+    )
+
+
+    if not tooltip:
+        return None, None
+
+
+    text = tooltip.split(
+        "<br>"
+    )[0].strip()
+
+
+    match = re.search(
+        r"(\d+)%",
+        tooltip
+    )
+
+
+    percent = int(
+        match.group(1)
+    ) if match else None
+
+
+    return text or None, percent
 
 
 
@@ -536,6 +749,12 @@ class SteamClient:
 
 
 
+        rating_text, rating_percent = extract_rating(
+            result
+        )
+
+
+
         return {
 
 
@@ -547,7 +766,17 @@ class SteamClient:
 
             "url":
 
-            f"https://store.steampowered.com/app/{appid}"
+            f"https://store.steampowered.com/app/{appid}",
+
+
+            "rating_text":
+
+            rating_text,
+
+
+            "rating_percent":
+
+            rating_percent
 
 
         }

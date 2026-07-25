@@ -1,10 +1,41 @@
 import threading
+from datetime import datetime, timedelta
 
 from database import Database
 from lutris import LutrisReader
-from steam import SteamClient, normalize, clean_bbcode, find_matching_news
-from images import ensure_image_cached
+from steam import SteamClient, normalize, clean_bbcode, find_matching_news, extract_note_image_urls
+from images import ensure_image_cached, ensure_note_image_cached
 from gui import UpdateGUI
+
+
+# How long to wait before retrying a Steam search for a game that
+# came up with no match last time - avoids hammering Steam every
+# single refresh for games that simply aren't on Steam.
+RETRY_COOLDOWN_DAYS = 7
+
+
+def should_retry_search(last_checked):
+
+    if not last_checked:
+        return True
+
+
+    try:
+
+        checked_at = datetime.fromisoformat(
+            last_checked
+        )
+
+    except ValueError:
+
+        return True
+
+
+    return (
+        datetime.now() - checked_at
+        >=
+        timedelta(days=RETRY_COOLDOWN_DAYS)
+    )
 
 
 
@@ -13,61 +44,6 @@ database = Database()
 lutris = LutrisReader()
 
 steam = SteamClient()
-
-def display_notes(name, title, notes):
-
-    gui.log(
-        "═══════════════════════════"
-    )
-
-    gui.log(
-        f"🎮 {name} — {title}"
-    )
-
-    gui.log(
-        "───────────────────────────"
-    )
-
-    for line in notes.splitlines():
-
-        if line.strip():
-
-            gui.log(
-                line.strip()
-            )
-
-    gui.log(
-        "═══════════════════════════"
-    )
-
-
-
-def show_notes(update):
-
-    if update["notes"]:
-
-        display_notes(
-            update["lutris_name"],
-            update["title"],
-            update["notes"]
-        )
-
-        return
-
-
-
-    fallback = (
-        update["description"]
-        or
-        "No notes available."
-    )
-
-
-    display_notes(
-        update["lutris_name"],
-        update["title"] + " (full notes not fetched yet)",
-        fallback
-    )
 
 
 
@@ -216,7 +192,25 @@ def run_refresh():
             # Steam search only if needed
             # -------------------------
 
-            if not game["steam_appid"]:
+            needs_search = not game["steam_appid"]
+
+
+            if (
+                needs_search
+                and game["unavailable"]
+                and not should_retry_search(game["last_checked"])
+            ):
+
+                needs_search = False
+
+                gui.log(
+                    "  ⏭ Skipping search "
+                    "(no Steam match recently, will retry later)"
+                )
+
+
+
+            if needs_search:
 
 
                 gui.log(
@@ -239,7 +233,11 @@ def run_refresh():
 
                         result["appid"],
 
-                        result["url"]
+                        result["url"],
+
+                        result.get("rating_text"),
+
+                        result.get("rating_percent")
 
                     )
 
@@ -258,6 +256,11 @@ def run_refresh():
 
 
                     database.save_not_found(
+                        game_id
+                    )
+
+
+                    database.set_checked(
                         game_id
                     )
 
@@ -336,26 +339,21 @@ def run_refresh():
 
                         if match:
 
-                            gui.log(
-                                f"  📖 Notes matched: {update['title']}"
-                            )
-
-
                             notes = clean_bbcode(
                                 match.get("contents", "")
                             )
 
 
+                            for image_url in extract_note_image_urls(notes):
+
+                                ensure_note_image_cached(
+                                    image_url
+                                )
+
+
                             database.save_notes(
                                 result["id"],
                                 notes
-                            )
-
-
-                        else:
-
-                            gui.log(
-                                f"  ⚠️ No official news match for: {update['title']}"
                             )
 
 
@@ -454,8 +452,7 @@ def run_refresh():
 
 gui = UpdateGUI(
     database,
-    refresh,
-    show_notes
+    refresh
 )
 
 

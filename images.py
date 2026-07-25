@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 import requests
 
 
@@ -116,6 +117,110 @@ def ensure_image_cached(appid):
         except requests.RequestException:
 
             continue
+
+
+
+    return None
+
+
+
+# ----------------------------------------------------------------
+# Inline patch-note images (e.g. screenshots embedded via
+# [img src="{STEAM_CLAN_IMAGE}/..."]). These aren't tied to a
+# Steam appid, so they're cached by a hash of their resolved URL
+# instead.
+# ----------------------------------------------------------------
+
+
+def _note_image_path(url):
+
+    if not url:
+        return None
+
+
+    digest = hashlib.sha1(
+        url.encode("utf-8")
+    ).hexdigest()
+
+
+    suffix = Path(
+        url.split("?", 1)[0]
+    ).suffix
+
+
+    if not suffix or len(suffix) > 5:
+        suffix = ".jpg"
+
+
+    return IMAGE_DIR / f"note_{digest}{suffix}"
+
+
+
+def get_local_note_image_path(url):
+
+    """
+    Read-only lookup — never makes a network request.
+    Safe to call from the GUI thread.
+    """
+
+    path = _note_image_path(
+        url
+    )
+
+
+    if path and path.exists():
+        return path
+
+
+    return None
+
+
+
+def ensure_note_image_cached(url):
+
+    """
+    Download an inline patch-note image once and cache it to
+    disk. If it's already cached, this makes no network request.
+    """
+
+    path = _note_image_path(
+        url
+    )
+
+
+    if path is None:
+        return None
+
+
+    if path.exists():
+        return path
+
+
+    try:
+
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=10
+        )
+
+
+        if (
+            response.status_code == 200
+            and response.content
+        ):
+
+            path.write_bytes(
+                response.content
+            )
+
+
+            return path
+
+
+    except requests.RequestException:
+
+        pass
 
 
 

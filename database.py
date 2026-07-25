@@ -50,6 +50,26 @@ class Database:
             )
 
 
+            # Existing databases were created before these columns
+            # existed - CREATE TABLE IF NOT EXISTS won't add them,
+            # so add them by hand if they're missing.
+
+            for column, coltype in (
+                ("steam_rating_text", "TEXT"),
+                ("steam_rating_percent", "INTEGER")
+            ):
+
+                try:
+
+                    self.connection.execute(
+                        f"ALTER TABLE games ADD COLUMN {column} {coltype}"
+                    )
+
+                except sqlite3.OperationalError:
+
+                    pass
+
+
             self.connection.commit()
 
 
@@ -143,7 +163,9 @@ class Database:
             self,
             game_id,
             appid,
-            url
+            url,
+            rating_text=None,
+            rating_percent=None
     ):
 
         with self.lock:
@@ -155,6 +177,8 @@ class Database:
                 SET
                     steam_appid=?,
                     steam_url=?,
+                    steam_rating_text=?,
+                    steam_rating_percent=?,
                     unavailable=0
 
                 WHERE id=?
@@ -162,6 +186,8 @@ class Database:
                 (
                     appid,
                     url,
+                    rating_text,
+                    rating_percent,
                     game_id
                 )
             )
@@ -466,6 +492,8 @@ class Database:
                     SELECT
                         games.lutris_name,
                         games.steam_appid,
+                        games.steam_rating_text,
+                        games.steam_rating_percent,
                         updates.*
 
                     FROM updates
@@ -492,6 +520,8 @@ class Database:
                     SELECT
                         games.lutris_name,
                         games.steam_appid,
+                        games.steam_rating_text,
+                        games.steam_rating_percent,
                         updates.*
 
                     FROM updates

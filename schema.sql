@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS games (
 
     steam_appid TEXT,
     steam_url TEXT,
+    steam_rating_text TEXT,
+    steam_rating_percent INTEGER,
 
     unavailable INTEGER DEFAULT 0,
 

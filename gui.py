@@ -641,7 +641,8 @@ class UpdateGUI:
 
         self.tree.column(
             "#0",
-            width=170,
+            width=190,
+            minwidth=190,
             stretch=False,
             anchor="center"
         )
@@ -749,17 +750,34 @@ class UpdateGUI:
 
         close_button = tk.Button(
             self.details_frame,
-            text="✕",
+            text="❌",
             command=self.hide_details,
             bg=PANEL_BG,
             fg="#eeeeee",
             activebackground=PANEL_BG,
             activeforeground="#eeeeee",
             bd=0,
+            relief="flat",
+            highlightthickness=0,
+            borderwidth=0,
             font=(
                 "Segoe UI",
                 14,
                 "bold"
+            )
+        )
+            
+        close_button.bind(
+            "<Enter>",
+            lambda e: close_button.config(
+                bg="#2a2d3e"
+            )
+        )
+
+        close_button.bind(
+            "<Leave>",
+            lambda e: close_button.config(
+                bg=PANEL_BG
             )
         )
 
@@ -859,6 +877,9 @@ class UpdateGUI:
             insertbackground="white",
             wrap="word",
             bd=0,
+            relief="flat",
+            highlightthickness=0,
+            borderwidth=0,
             padx=12,
             pady=10,
             spacing1=2,

@@ -1,6 +1,9 @@
 from pathlib import Path
+from io import BytesIO
 import hashlib
 import requests
+
+from PIL import Image
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -10,6 +13,17 @@ IMAGE_DIR = BASE_DIR / "images"
 IMAGE_DIR.mkdir(
     exist_ok=True
 )
+
+
+# Patch-note screenshots are only ever shown small and inline, so
+# unlike game thumbnails they're worth shrinking on disk. Each one
+# is downscaled to fit within this many pixels per side (aspect
+# ratio kept, never upscaled) and re-saved as a JPEG at this
+# quality to keep the cache small.
+
+NOTE_IMAGE_MAX_SIZE = 200
+
+NOTE_IMAGE_QUALITY = 95
 
 
 HEADERS = {
@@ -239,16 +253,12 @@ def _note_image_path(url):
     ).hexdigest()
 
 
-    suffix = Path(
-        url.split("?", 1)[0]
-    ).suffix
+    # Always cached as .jpg - regardless of the source format,
+    # ensure_note_image_cached re-encodes every note image as a
+    # compressed JPEG, so the extension should reflect that rather
+    # than the original URL's suffix.
 
-
-    if not suffix or len(suffix) > 5:
-        suffix = ".jpg"
-
-
-    return IMAGE_DIR / f"note_{digest}{suffix}"
+    return IMAGE_DIR / f"note_{digest}.jpg"
 
 
 
@@ -272,11 +282,66 @@ def get_local_note_image_path(url):
 
 
 
+def _save_compressed_note_image(content, path):
+
+    """
+    Resize the downloaded image so neither side exceeds
+    NOTE_IMAGE_MAX_SIZE (aspect ratio preserved, never upscaled)
+    and re-save it as a JPEG at NOTE_IMAGE_QUALITY. This is only
+    used for inline patch-note images - game thumbnails are left
+    untouched by ensure_image_cached().
+    """
+
+    with Image.open(BytesIO(content)) as image:
+
+        image.thumbnail(
+            (NOTE_IMAGE_MAX_SIZE, NOTE_IMAGE_MAX_SIZE),
+            Image.LANCZOS
+        )
+
+
+        # JPEG has no alpha channel - flatten anything with
+        # transparency (PNG/GIF/WEBP) onto a white background
+        # first instead of letting save() error out or discard it
+        # oddly.
+
+        if image.mode in ("RGBA", "LA", "P"):
+
+            background = Image.new(
+                "RGB",
+                image.size,
+                (255, 255, 255)
+            )
+
+            rgba_image = image.convert("RGBA")
+
+            background.paste(
+                rgba_image,
+                mask=rgba_image.split()[-1]
+            )
+
+            image = background
+
+        else:
+
+            image = image.convert("RGB")
+
+
+        image.save(
+            path,
+            "JPEG",
+            quality=NOTE_IMAGE_QUALITY,
+            optimize=True
+        )
+
+
+
 def ensure_note_image_cached(url):
 
     """
-    Download an inline patch-note image once and cache it to
-    disk. If it's already cached, this makes no network request.
+    Download an inline patch-note image once, compress/resize it,
+    and cache it to disk. If it's already cached, this makes no
+    network request.
     """
 
     path = _note_image_path(
@@ -306,9 +371,22 @@ def ensure_note_image_cached(url):
             and response.content
         ):
 
-            path.write_bytes(
-                response.content
-            )
+            try:
+
+                _save_compressed_note_image(
+                    response.content,
+                    path
+                )
+
+            except Exception:
+
+                # Not a format Pillow can decode, or otherwise
+                # corrupt - fall back to caching the raw bytes
+                # rather than losing the image entirely.
+
+                path.write_bytes(
+                    response.content
+                )
 
 
             return path

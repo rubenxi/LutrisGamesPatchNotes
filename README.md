@@ -2,7 +2,7 @@
 
 A desktop app that watches your [Lutris](https://lutris.net/) game library and tells you when a game gets a new update on Steam. It matches each installed game to its Steam store page, pulls patch notes from SteamDB and the official Steam News API, caches box art locally, and shows everything in a dark-themed Tkinter dashboard you can search and browse.
 
-<img width="2427" height="1909" alt="image" src="https://github.com/user-attachments/assets/ee9d5e02-881e-44ec-a0e4-722cef26c865" />
+<img width="2993" height="1916" alt="image" src="https://github.com/user-attachments/assets/86762dad-4c2f-42e2-8bb5-1cab9a451a6a" />
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 

@@ -3,6 +3,8 @@ from tkinter import ttk
 import subprocess
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from PIL import Image, ImageTk
+from images import get_local_image_path
 
 
 class UpdateGUI:
@@ -35,6 +37,7 @@ class UpdateGUI:
 
         self.updates = []
         self.new_updates = set()
+        self.photo_cache = {}
         self.create_widgets()
 
 
@@ -252,7 +255,24 @@ class UpdateGUI:
         self.tree = ttk.Treeview(
             frame,
             columns=columns,
-            show="headings"
+            show=(
+                "tree",
+                "headings"
+            )
+        )
+
+
+        self.tree.heading(
+            "#0",
+            text="🖼️"
+        )
+
+
+        self.tree.column(
+            "#0",
+            width=170,
+            stretch=False,
+            anchor="center"
         )
 
 
@@ -541,6 +561,59 @@ class UpdateGUI:
     # ------------------------------------------------
 
 
+    def get_photo(
+            self,
+            appid
+    ):
+
+        if not appid:
+            return None
+
+
+        if appid in self.photo_cache:
+            return self.photo_cache[appid]
+
+
+        path = get_local_image_path(
+            appid
+        )
+
+
+        if not path:
+            return None
+
+
+        try:
+
+            image = Image.open(
+                path
+            )
+
+            image.thumbnail(
+                (
+                    160,
+                    60
+                )
+            )
+
+            photo = ImageTk.PhotoImage(
+                image
+            )
+
+
+        except Exception:
+
+            return None
+
+
+
+        self.photo_cache[appid] = photo
+
+
+        return photo
+
+
+
     def format_date(self, value):
 
         if not value:
@@ -644,11 +717,16 @@ class UpdateGUI:
                 game_name = "🌟 " + update["lutris_name"] + " 🌟"
             else:
                 game_name = update["lutris_name"]
+            photo = self.get_photo(
+                update["steam_appid"]
+            )
+
             self.tree.insert(
                 "",
                 "end",
                 iid=str(index),
                 tags=tags,
+                image=photo if photo else "",
                 values=(
                     game_name,
                     self.format_date(update["update_date"]),

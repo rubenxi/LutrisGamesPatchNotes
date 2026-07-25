@@ -465,6 +465,7 @@ class Database:
                     """
                     SELECT
                         games.lutris_name,
+                        games.steam_appid,
                         updates.*
 
                     FROM updates
@@ -490,6 +491,7 @@ class Database:
                     """
                     SELECT
                         games.lutris_name,
+                        games.steam_appid,
                         updates.*
 
                     FROM updates

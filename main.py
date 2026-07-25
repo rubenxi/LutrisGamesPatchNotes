@@ -3,6 +3,7 @@ import threading
 from database import Database
 from lutris import LutrisReader
 from steam import SteamClient, normalize, clean_bbcode, find_matching_news
+from images import ensure_image_cached
 from gui import UpdateGUI
 
 
@@ -280,6 +281,11 @@ def run_refresh():
             # -------------------------
 
             if game["steam_appid"]:
+
+
+                ensure_image_cached(
+                    game["steam_appid"]
+                )
 
 
                 gui.log(

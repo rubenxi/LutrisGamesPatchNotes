@@ -4,10 +4,7 @@ A desktop app that watches your [Lutris](https://lutris.net/) game library and t
 
 <img width="2427" height="1909" alt="image" src="https://github.com/user-attachments/assets/ee9d5e02-881e-44ec-a0e4-722cef26c865" />
 
-
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green)
-
-
 
 ## Features
 
@@ -136,7 +133,7 @@ The script uses scraping to get information from Steam and SteamDB.
 - python3-tk
 
 ```
-pip install -r requirements.txt
+pip install -r requirements_old.txt
 ```
 or
 ```

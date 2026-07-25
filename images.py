@@ -21,9 +21,14 @@ HEADERS = {
 }
 
 
-# Steam serves these directly from its CDN, keyed by appid — no
-# lookup request needed, just a plain image download. Try the
-# small capsule first, fall back to the header image if missing.
+# Fallback only. This unhashed CDN path only works for older,
+# long-established games — newer or recently-repackaged store
+# assets live under a content-hash segment we can't guess
+# ("store_item_assets/steam/apps/{appid}/{hash}/header.jpg"), so
+# for those this template 404s. ensure_image_cached() tries the
+# Steam appdetails API first, which always returns the correct,
+# current URL, and only falls back to guessing these if that
+# lookup itself fails (e.g. Steam API hiccup).
 
 IMAGE_URL_TEMPLATES = [
 
@@ -32,6 +37,73 @@ IMAGE_URL_TEMPLATES = [
     "https://cdn.cloudflare.steamstatic.com/steam/apps/{}/header.jpg",
 
 ]
+
+
+# Storefront API - given an appid, tells us the *current*,
+# correctly-hashed capsule/header image URLs. Doesn't require a
+# key. See https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI
+
+STEAM_APPDETAILS_API = (
+    "https://store.steampowered.com/api/appdetails"
+    "?appids={}&filters=basic"
+)
+
+
+
+def _lookup_current_image_url(appid):
+
+    """
+    Ask Steam directly for this app's current image URLs instead
+    of guessing a CDN path. Covers games whose store assets live
+    under a hashed path (new releases, upcoming/unreleased games,
+    or anything re-processed since launch) that the static
+    IMAGE_URL_TEMPLATES can't predict.
+    """
+
+    try:
+
+        response = requests.get(
+            STEAM_APPDETAILS_API.format(appid),
+            headers=HEADERS,
+            timeout=10
+        )
+
+
+        if response.status_code != 200:
+            return None
+
+
+        payload = response.json()
+
+    except (requests.RequestException, ValueError):
+
+        return None
+
+
+
+    entry = payload.get(
+        str(appid)
+    )
+
+
+    if not entry or not entry.get("success"):
+        return None
+
+
+    data = entry.get(
+        "data",
+        {}
+    )
+
+
+    # Prefer the small capsule (matches what the old templates
+    # tried first), fall back to progressively larger images.
+
+    return (
+        data.get("capsule_imagev5")
+        or data.get("capsule_image")
+        or data.get("header_image")
+    )
 
 
 
@@ -85,11 +157,32 @@ def ensure_image_cached(appid):
         return path
 
 
-    for template in IMAGE_URL_TEMPLATES:
+    urls_to_try = []
 
-        url = template.format(
-            appid
+
+    dynamic_url = _lookup_current_image_url(
+        appid
+    )
+
+
+    if dynamic_url:
+
+        urls_to_try.append(
+            dynamic_url
         )
+
+
+    urls_to_try.extend(
+
+        template.format(appid)
+
+        for template in IMAGE_URL_TEMPLATES
+
+    )
+
+
+
+    for url in urls_to_try:
 
 
         try:

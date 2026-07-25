@@ -1636,7 +1636,7 @@ class UpdateGUI:
 
             if important:
                 description = "🚀 " + description
-                game_name = "🌟 " + update["lutris_name"] + " 🌟"
+                game_name = update["lutris_name"] + " 🌟"
             else:
                 game_name = update["lutris_name"]
             photo = self.get_photo(

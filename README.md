@@ -19,6 +19,9 @@ A desktop app that watches your [Lutris](https://lutris.net/) game library and t
 - **Searchable GUI** — a dark, rounded-corner Tkinter UI with a live search box, a sortable update list, and a details panel showing box art, rating, and full patch notes with inline images.
 - **New-update alerts** — newly discovered updates are flagged and logged in the app as they come in.
 - **One-click browsing** — double-click (or use the built-in action) to open a game's SteamDB page in Brave.
+- **Right-click to hide** — rick-click to set game as hidden, the app won't check updates for it and will delete all current entries.
+- **Zoom to read** — zoom with Ctrl + mouse wheel to enlarge or make smaller the text.
+
 
 ## How it works
 

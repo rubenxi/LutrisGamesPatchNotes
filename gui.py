@@ -682,28 +682,10 @@ class UpdateGUI:
         )
 
 
-
-        scrollbar = ttk.Scrollbar(
-            tree_container,
-            orient="vertical",
-            command=self.tree.yview
-        )
-
-
-        self.tree.configure(
-            yscrollcommand=scrollbar.set
-        )
-
-
         self.tree.pack(
             side="left",
             fill="both",
             expand=True
-        )
-
-        scrollbar.pack(
-            side="right",
-            fill="y"
         )
 
 

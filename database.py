@@ -56,7 +56,8 @@ class Database:
 
             for column, coltype in (
                 ("steam_rating_text", "TEXT"),
-                ("steam_rating_percent", "INTEGER")
+                ("steam_rating_percent", "INTEGER"),
+                ("hidden", "INTEGER DEFAULT 0")
             ):
 
                 try:
@@ -209,6 +210,54 @@ class Database:
                 UPDATE games
 
                 SET unavailable=1
+
+                WHERE id=?
+                """,
+                (
+                    game_id,
+                )
+            )
+
+
+            self.connection.commit()
+
+
+
+    def hide_game(
+            self,
+            game_id
+    ):
+
+        """
+        Hides a game permanently: wipes any updates already saved
+        for it, and flags the game itself so future refreshes
+        skip it entirely (no Steam search, no SteamDB checks).
+        The game row itself is kept (rather than deleted) so it
+        isn't just re-added and re-searched on the next refresh,
+        since it's still present in the Lutris library.
+        """
+
+        with self.lock:
+
+            cursor = self.connection.cursor()
+
+
+            cursor.execute(
+                """
+                DELETE FROM updates
+                WHERE game_id=?
+                """,
+                (
+                    game_id,
+                )
+            )
+
+
+            cursor.execute(
+                """
+                UPDATE games
+
+                SET hidden=1
 
                 WHERE id=?
                 """,
@@ -503,6 +552,7 @@ class Database:
                     ON games.id=updates.game_id
 
                     WHERE games.id=?
+                    AND games.hidden=0
 
                     ORDER BY update_date DESC
                     """,
@@ -529,6 +579,8 @@ class Database:
                     JOIN games
 
                     ON games.id=updates.game_id
+
+                    WHERE games.hidden=0
 
                     ORDER BY update_date DESC
                     """

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS games (
     steam_rating_percent INTEGER,
 
     unavailable INTEGER DEFAULT 0,
+    hidden INTEGER DEFAULT 0,
 
     last_checked TEXT
 );

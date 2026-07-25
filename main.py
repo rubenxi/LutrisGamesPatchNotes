@@ -188,6 +188,21 @@ def run_refresh():
 
 
 
+            if game["hidden"]:
+
+                gui.log(
+                    "  🙈 Hidden - skipping"
+                )
+
+                gui.set_progress(
+                    index + 1,
+                    total
+                )
+
+                continue
+
+
+
             # -------------------------
             # Steam search only if needed
             # -------------------------

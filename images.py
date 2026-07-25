@@ -32,9 +32,9 @@ HEADERS = {
 
 IMAGE_URL_TEMPLATES = [
 
-    "https://cdn.cloudflare.steamstatic.com/steam/apps/{}/capsule_184x69.jpg",
-
     "https://cdn.cloudflare.steamstatic.com/steam/apps/{}/header.jpg",
+
+    "https://cdn.cloudflare.steamstatic.com/steam/apps/{}/capsule_184x69.jpg",
 
 ]
 
@@ -96,13 +96,16 @@ def _lookup_current_image_url(appid):
     )
 
 
-    # Prefer the small capsule (matches what the old templates
-    # tried first), fall back to progressively larger images.
+    # Prefer the biggest source image available. thumbnail() can
+    # only shrink an image, never enlarge it - if we cache a small
+    # capsule (184x69 or 231x87), that's the ceiling on how big it
+    # can ever be shown, no matter the thumbnail box size later.
+    # header_image (~460x215) gives real resolution to work with.
 
     return (
-        data.get("capsule_imagev5")
+        data.get("header_image")
         or data.get("capsule_image")
-        or data.get("header_image")
+        or data.get("capsule_imagev5")
     )
 
 

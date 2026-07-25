@@ -352,6 +352,458 @@ class RoundedEntryFrame(tk.Frame):
         return self.entry.get()
 
 
+class ContextMenu(tk.Toplevel):
+
+    """
+    A themed stand-in for tk.Menu. Native menus render with
+    whatever the OS/window-manager theme is (usually a plain
+    square Motif/GTK look), which clashes badly with the rest of
+    this app's dark, rounded-corner styling. This draws a small
+    borderless popup instead, with items that highlight on hover.
+    """
+
+    def __init__(
+            self,
+            root_window,
+            items,
+            radius=12
+    ):
+
+        super().__init__(
+            root_window
+        )
+
+        self.root_window = root_window
+        self._click_bind_id = None
+
+        self.overrideredirect(
+            True
+        )
+
+        self.attributes(
+            "-topmost",
+            True
+        )
+
+
+        # A 1px BORDER-colored Toplevel background peeking out
+        # around a PANEL_BG_ALT inner frame fakes a hairline
+        # border, since Toplevel itself can't have rounded
+        # corners or a real outline.
+
+        self.configure(
+            bg=BORDER
+        )
+
+        inner = tk.Frame(
+            self,
+            bg=PANEL_BG_ALT
+        )
+
+        inner.pack(
+            padx=1,
+            pady=1
+        )
+
+
+        for entry in items:
+
+            label, command = entry[0], entry[1]
+
+            danger = entry[2] if len(entry) > 2 else False
+
+            self._add_item(
+                inner,
+                label,
+                command,
+                danger
+            )
+
+
+        self.bind(
+            "<Escape>",
+            lambda event: self.close()
+        )
+
+
+    def _add_item(
+            self,
+            parent,
+            label,
+            command,
+            danger
+    ):
+
+        row = tk.Label(
+            parent,
+            text=label,
+            bg=PANEL_BG_ALT,
+            fg="#f87171" if danger else "#eeeeee",
+            font=(
+                "Segoe UI",
+                11
+            ),
+            anchor="w",
+            padx=18,
+            pady=10,
+            cursor="hand2"
+        )
+
+        row.pack(
+            fill="x"
+        )
+
+        row.bind(
+            "<Enter>",
+            lambda event, r=row: r.configure(bg=BUTTON_BG_HOVER)
+        )
+
+        row.bind(
+            "<Leave>",
+            lambda event, r=row: r.configure(bg=PANEL_BG_ALT)
+        )
+
+        row.bind(
+            "<Button-1>",
+            lambda event, cmd=command: self._select(cmd)
+        )
+
+
+    def _select(self, command):
+
+        self.close()
+
+        command()
+
+
+    def show(self, x, y):
+
+        self.update_idletasks()
+
+        self.geometry(
+            f"+{x}+{y}"
+        )
+
+        self.deiconify()
+
+        self.lift()
+
+
+        # Any click on the root window outside the menu itself
+        # closes it - the menu's own rows stop this via the
+        # "break" they return below, so only outside clicks reach
+        # here.
+
+        self._click_bind_id = self.root_window.bind(
+            "<Button-1>",
+            lambda event: self.close(),
+            add="+"
+        )
+
+        self.bind(
+            "<FocusOut>",
+            lambda event: self.close()
+        )
+
+        self.focus_set()
+
+
+    def close(self):
+
+        if self._click_bind_id:
+
+            try:
+
+                self.root_window.unbind(
+                    "<Button-1>",
+                    self._click_bind_id
+                )
+
+            except tk.TclError:
+
+                pass
+
+            self._click_bind_id = None
+
+
+        try:
+
+            self.destroy()
+
+        except tk.TclError:
+
+            pass
+
+
+class ConfirmDialog(tk.Toplevel):
+
+    """
+    A themed replacement for tkinter.messagebox.askyesno. The
+    stock messagebox pops up as a plain OS dialog that clashes
+    with the rest of the app, so this draws a small dark panel
+    instead, using the same RoundedButton the rest of the UI
+    already uses.
+    """
+
+    def __init__(
+            self,
+            root_window,
+            title,
+            message,
+            confirm_label="Confirm",
+            cancel_label="Cancel",
+            danger=True
+    ):
+
+        super().__init__(
+            root_window
+        )
+
+        self.root_window = root_window
+        self.result = False
+
+        self.overrideredirect(
+            True
+        )
+
+        self.attributes(
+            "-topmost",
+            True
+        )
+
+
+        # Same hairline-border trick as ContextMenu: a
+        # BORDER-colored Toplevel peeking out around a PANEL_BG
+        # inner panel.
+
+        self.configure(
+            bg=BORDER
+        )
+
+        panel = tk.Frame(
+            self,
+            bg=PANEL_BG
+        )
+
+        panel.pack(
+            padx=1,
+            pady=1
+        )
+
+        content = tk.Frame(
+            panel,
+            bg=PANEL_BG
+        )
+
+        content.pack(
+            padx=28,
+            pady=24
+        )
+
+
+        tk.Label(
+            content,
+            text=title,
+            bg=PANEL_BG,
+            fg=ACCENT,
+            font=(
+                "Segoe UI",
+                15,
+                "bold"
+            ),
+            anchor="w",
+            justify="left"
+        ).pack(
+            fill="x",
+            pady=(0, 12)
+        )
+
+        tk.Label(
+            content,
+            text=message,
+            bg=PANEL_BG,
+            fg="#cbd5e1",
+            font=(
+                "Segoe UI",
+                11
+            ),
+            anchor="w",
+            justify="left",
+            wraplength=360
+        ).pack(
+            fill="x",
+            pady=(0, 24)
+        )
+
+
+        button_row = tk.Frame(
+            content,
+            bg=PANEL_BG
+        )
+
+        button_row.pack(
+            fill="x"
+        )
+
+        confirm_color = "#f87171" if danger else BUTTON_OUTLINE
+
+
+        cancel_button = RoundedButton(
+            button_row,
+            text=cancel_label,
+            command=self._cancel,
+            width=150,
+            height=44,
+            radius=14,
+            bg_parent=PANEL_BG,
+            fill=BUTTON_BG,
+            fill_hover=BUTTON_BG_HOVER,
+            outline=BORDER,
+            fg="#cbd5e1",
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            )
+        )
+
+        cancel_button.pack(
+            side="left"
+        )
+
+        confirm_button = RoundedButton(
+            button_row,
+            text=confirm_label,
+            command=self._confirm,
+            width=150,
+            height=44,
+            radius=14,
+            bg_parent=PANEL_BG,
+            fill=BUTTON_BG,
+            fill_hover=BUTTON_BG_HOVER,
+            outline=confirm_color,
+            fg=confirm_color,
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            )
+        )
+
+        confirm_button.pack(
+            side="right"
+        )
+
+
+        self.bind(
+            "<Escape>",
+            lambda event: self._cancel()
+        )
+
+
+    def _confirm(self):
+
+        self.result = True
+
+        self._close()
+
+
+    def _cancel(self):
+
+        self.result = False
+
+        self._close()
+
+
+    def _close(self):
+
+        try:
+
+            self.grab_release()
+
+        except tk.TclError:
+
+            pass
+
+        try:
+
+            self.destroy()
+
+        except tk.TclError:
+
+            pass
+
+
+    def show(self):
+
+        self.update_idletasks()
+
+
+        # Center over the main window rather than the cursor -
+        # this is a deliberate "are you sure" prompt, not a
+        # context menu, so it should draw the eye to the middle
+        # of the app.
+
+        root = self.root_window
+
+        root.update_idletasks()
+
+        width = self.winfo_reqwidth()
+        height = self.winfo_reqheight()
+
+        x = (
+            root.winfo_rootx()
+            +
+            (root.winfo_width() - width) // 2
+        )
+
+        y = (
+            root.winfo_rooty()
+            +
+            (root.winfo_height() - height) // 2
+        )
+
+        self.geometry(
+            f"+{x}+{y}"
+        )
+
+        self.deiconify()
+
+        self.lift()
+
+        self.focus_force()
+
+        self.grab_set()
+
+        self.wait_window(
+            self
+        )
+
+
+        return self.result
+
+
+def ask_confirm(
+        root_window,
+        title,
+        message,
+        confirm_label="Confirm",
+        cancel_label="Cancel",
+        danger=True
+):
+
+    dialog = ConfirmDialog(
+        root_window,
+        title,
+        message,
+        confirm_label=confirm_label,
+        cancel_label=cancel_label,
+        danger=danger
+    )
+
+    return dialog.show()
+
+
 class UpdateGUI:
 
 
@@ -715,6 +1167,11 @@ class UpdateGUI:
             self.row_selected
         )
 
+        self.tree.bind(
+            "<Button-3>",
+            self.show_tree_context_menu
+        )
+
 
 
         # -------------------------
@@ -873,29 +1330,40 @@ class UpdateGUI:
             )
         )
 
-        notes_scrollbar = ttk.Scrollbar(
-            notes_frame,
-            orient="vertical",
-            command=self.details_notes_text.yview
-        )
-
-        self.details_notes_text.configure(
-            yscrollcommand=notes_scrollbar.set
-        )
-
         self.details_notes_text.pack(
             side="left",
             fill="both",
             expand=True
         )
 
-        notes_scrollbar.pack(
-            side="right",
-            fill="y"
-        )
-
         self.details_notes_text.configure(
             state="disabled"
+        )
+
+
+        # Ctrl + mouse wheel zooms the notes text in/out instead
+        # of scrolling. <MouseWheel> covers Windows/Mac; Linux
+        # (X11) sends wheel events as Button-4 (up) / Button-5
+        # (down) instead, so both are bound.
+
+        self.notes_font_family = "Segoe UI"
+        self.notes_font_size = 12
+        self.notes_font_min = 8
+        self.notes_font_max = 28
+
+        self.details_notes_text.bind(
+            "<Control-MouseWheel>",
+            self._on_notes_ctrl_wheel
+        )
+
+        self.details_notes_text.bind(
+            "<Control-Button-4>",
+            self._on_notes_ctrl_wheel_up
+        )
+
+        self.details_notes_text.bind(
+            "<Control-Button-5>",
+            self._on_notes_ctrl_wheel_down
         )
 
 
@@ -1200,6 +1668,104 @@ class UpdateGUI:
 
 
     # ------------------------------------------------
+    # Right-click menu / hiding a game
+    # ------------------------------------------------
+
+    def show_tree_context_menu(
+            self,
+            event
+    ):
+
+        row_id = self.tree.identify_row(
+            event.y
+        )
+
+        if not row_id:
+            return
+
+
+        # Right-clicking a row should also select it, so it's
+        # obvious which game the menu is about to act on.
+
+        self.tree.selection_set(
+            row_id
+        )
+
+
+        update = self.updates[
+            int(row_id)
+        ]
+
+
+        menu = ContextMenu(
+            self.root,
+            items=[
+                (
+                    f"🚫 Hide \"{update['lutris_name']}\"",
+                    lambda: self.hide_game(update),
+                    True
+                )
+            ]
+        )
+
+        menu.show(
+            event.x_root,
+            event.y_root
+        )
+
+
+    def hide_game(
+            self,
+            update
+    ):
+
+        game_name = update["lutris_name"]
+
+
+        confirmed = ask_confirm(
+            self.root,
+            title="Hide game",
+            message=(
+                f"Hide \"{game_name}\"?\n\n"
+                "This removes all its saved updates and stops "
+                "checking it for new ones on future refreshes. "
+                "This can't be undone from here."
+            ),
+            confirm_label="🚫 Hide",
+            cancel_label="Cancel",
+            danger=True
+        )
+
+        if not confirmed:
+            return
+
+
+        self.database.hide_game(
+            update["game_id"]
+        )
+
+
+        # Drop any pending "new update" flags for this game too,
+        # since its rows no longer exist.
+
+        self.new_updates = {
+            identifier
+            for identifier in self.new_updates
+            if identifier[0] != game_name
+        }
+
+
+        self.hide_details()
+
+        self.load_updates()
+
+        self.log(
+            f"🚫 Hid \"{game_name}\" - it won't be checked again"
+        )
+
+
+
+    # ------------------------------------------------
     # Open SteamDB
     # ------------------------------------------------
 
@@ -1229,6 +1795,89 @@ class UpdateGUI:
             self.show_notes_callback(
                 update
             )
+
+
+
+    # ------------------------------------------------
+    # Notes text zoom (Ctrl + mouse wheel)
+    # ------------------------------------------------
+
+    def _set_notes_font_size(
+            self,
+            size
+    ):
+
+        size = max(
+            self.notes_font_min,
+            min(
+                self.notes_font_max,
+                size
+            )
+        )
+
+        if size == self.notes_font_size:
+            return
+
+
+        self.notes_font_size = size
+
+        self.details_notes_text.configure(
+            font=(
+                self.notes_font_family,
+                self.notes_font_size
+            )
+        )
+
+
+    def _on_notes_ctrl_wheel(
+            self,
+            event
+    ):
+
+        # Windows/Mac: event.delta is +/-120 per notch.
+
+        if event.delta > 0:
+
+            self._set_notes_font_size(
+                self.notes_font_size + 1
+            )
+
+        else:
+
+            self._set_notes_font_size(
+                self.notes_font_size - 1
+            )
+
+
+        return "break"
+
+
+    def _on_notes_ctrl_wheel_up(
+            self,
+            event
+    ):
+
+        # Linux (X11): scroll-up arrives as Button-4.
+
+        self._set_notes_font_size(
+            self.notes_font_size + 1
+        )
+
+        return "break"
+
+
+    def _on_notes_ctrl_wheel_down(
+            self,
+            event
+    ):
+
+        # Linux (X11): scroll-down arrives as Button-5.
+
+        self._set_notes_font_size(
+            self.notes_font_size - 1
+        )
+
+        return "break"
 
 
 

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS updates (
     description TEXT,
     update_date TEXT,
     link TEXT,
+    notes TEXT,
 
     UNIQUE(game_id, link),
 

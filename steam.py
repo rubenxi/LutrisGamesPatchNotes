@@ -2,8 +2,10 @@ import requests
 import time
 import random
 import re
+import html
 import difflib
 import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 from gui import UpdateGUI
 
@@ -12,7 +14,8 @@ from gui import UpdateGUI
 HEADERS = {
 
     "User-Agent":
-    "Mozilla/5.0 SteamUpdateChecker"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 }
 
@@ -25,6 +28,12 @@ STEAM_SEARCH = (
 
 STEAMDB_RSS = (
     "https://steamdb.info/api/PatchnotesRSS/?appid={}"
+)
+
+
+STEAM_NEWS_API = (
+    "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/"
+    "?appid={}&count=30&maxlength=0&format=json"
 )
 
 
@@ -109,6 +118,118 @@ def similar(
 
 
 
+def clean_bbcode(text):
+
+    if not text:
+        return text
+
+
+    # Drop bbcode markup, keep the readable text.
+
+    text = re.sub(
+        r"\[img\][^\[]*\[/img\]",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"\[url=[^\]]*\]",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"\[/?[a-zA-Z0-9=\"' ]+\]",
+        "",
+        text
+    )
+
+    text = html.unescape(
+        text
+    )
+
+
+    lines = [
+
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
+
+    ]
+
+
+    return "\n".join(
+        lines
+    )
+
+
+
+def find_matching_news(
+        update_date,
+        news_items,
+        max_diff_seconds=3 * 24 * 3600
+):
+
+    # Titles share most of their text (the game name), so fuzzy
+    # title matching can't tell one post from another. Publish
+    # date does: SteamDB's pubDate for a real announcement lines
+    # up with the timestamp Steam's own News API reports for it.
+
+    try:
+
+        target_ts = parsedate_to_datetime(
+            update_date
+        ).timestamp()
+
+    except Exception:
+
+        return None
+
+
+
+    best_item = None
+
+    best_diff = None
+
+
+    for item in news_items:
+
+        item_date = item.get(
+            "date"
+        )
+
+
+        if item_date is None:
+            continue
+
+
+        diff = abs(
+            item_date - target_ts
+        )
+
+
+        if best_diff is None or diff < best_diff:
+
+            best_diff = diff
+
+            best_item = item
+
+
+
+    if (
+        best_item is not None
+        and best_diff is not None
+        and best_diff <= max_diff_seconds
+    ):
+
+        return best_item
+
+
+
+    return None
+
+
+
 class SteamClient:
 
 
@@ -118,6 +239,8 @@ class SteamClient:
         self.search_requests = 0
 
         self.rss_requests = 0
+
+        self.news_requests = 0
 
 
 
@@ -430,6 +553,87 @@ class SteamClient:
         }
 
 
+
+
+
+    # ---------------------------------
+    # OFFICIAL NEWS (full patch notes text, one request per game)
+    # ---------------------------------
+
+    def get_news_for_app(
+            self,
+            appid
+    ):
+
+        self.news_requests += 1
+
+
+        url = STEAM_NEWS_API.format(
+            appid
+        )
+
+
+        print(
+
+            f"[Steam] Fetching official news for app {appid}"
+
+        )
+
+
+        response = self.request(
+            url
+        )
+
+
+        if response is None:
+
+
+            print(
+
+                "[Steam] Failed to fetch news"
+
+            )
+
+
+            return []
+
+
+
+        try:
+
+            data = response.json()
+
+        except Exception as e:
+
+
+            print(
+
+                f"[Steam] News JSON error: {e}"
+
+            )
+
+
+            return []
+
+
+
+        items = (
+
+            data
+            .get("appnews", {})
+            .get("newsitems", [])
+
+        )
+
+
+        print(
+
+            f"[Steam] {len(items)} news items fetched for {appid}"
+
+        )
+
+
+        return items
 
 
 

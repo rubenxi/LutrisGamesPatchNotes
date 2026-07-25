@@ -392,9 +392,58 @@ class Database:
                 )
             )
 
+            inserted = cursor.rowcount > 0
+
             self.connection.commit()
 
-            return cursor.rowcount > 0
+
+            cursor.execute(
+                """
+                SELECT id, notes
+                FROM updates
+                WHERE game_id=? AND link=?
+                """,
+                (
+                    game_id,
+                    link
+                )
+            )
+
+            row = cursor.fetchone()
+
+
+            return {
+                "id": row["id"] if row else None,
+                "notes": row["notes"] if row else None,
+                "inserted": inserted
+            }
+
+
+
+    def save_notes(
+            self,
+            update_id,
+            notes
+    ):
+
+        with self.lock:
+
+            self.connection.execute(
+                """
+                UPDATE updates
+
+                SET notes=?
+
+                WHERE id=?
+                """,
+                (
+                    notes,
+                    update_id
+                )
+            )
+
+
+            self.connection.commit()
 
 
 

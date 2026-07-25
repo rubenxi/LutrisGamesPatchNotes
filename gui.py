@@ -11,11 +11,13 @@ class UpdateGUI:
     def __init__(
             self,
             database,
-            refresh_callback
+            refresh_callback,
+            show_notes_callback=None
     ):
 
         self.database = database
         self.refresh_callback = refresh_callback
+        self.show_notes_callback = show_notes_callback
 
         self.root = tk.Tk()
 
@@ -332,6 +334,11 @@ class UpdateGUI:
         self.tree.bind(
             "<Double-1>",
             self.open_selected
+        )
+
+        self.tree.bind(
+            "<<TreeviewSelect>>",
+            self.row_selected
         )
 
 
@@ -663,6 +670,32 @@ class UpdateGUI:
     # ------------------------------------------------
     # Open SteamDB
     # ------------------------------------------------
+
+    def row_selected(
+            self,
+            event
+    ):
+
+        if not self.show_notes_callback:
+            return
+
+
+        selected = self.tree.selection()
+
+        if not selected:
+            return
+
+
+        update = self.updates[
+            int(selected[0])
+        ]
+
+
+        self.show_notes_callback(
+            update
+        )
+
+
 
     def open_selected(
             self,

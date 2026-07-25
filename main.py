@@ -244,15 +244,21 @@ def run_refresh():
                         update["date"],
                         update["link"]
                     )
-
                     if inserted:
-                        gui.root.after(
-                            0,
-                            lambda name=name, title=update["title"]:
-                                notify_new_update(name, title)
+                        identifier = (
+                            name,
+                            update["title"],
+                            update["date"],
                         )
 
-                        gui.root.after(0, gui.load_updates)
+                        gui.root.after(
+                            0,
+                            lambda i=identifier, n=name, t=update["title"]:
+                                (
+                                    gui.new_updates.add(i),
+                                    notify_new_update(n, t),
+                                )
+                        )
 
 
                 database.set_checked(

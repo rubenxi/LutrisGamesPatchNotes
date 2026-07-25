@@ -32,7 +32,7 @@ class UpdateGUI:
         )
 
         self.updates = []
-
+        self.new_updates = set()
         self.create_widgets()
 
 
@@ -91,10 +91,10 @@ class UpdateGUI:
             background="#202124",
             foreground="#eeeeee",
             fieldbackground="#202124",
-            rowheight=65,
+            rowheight=75,
             font=(
                 "Segoe UI",
-                11
+                15
             )
         )
 
@@ -201,11 +201,20 @@ class UpdateGUI:
         # Progress
         # -------------------------
 
-        self.progress = ttk.Progressbar(
-            self.root,
-            mode="determinate"
+        style.configure(
+            "Green.Horizontal.TProgressbar",
+            troughcolor="#202124",      # Background of the bar
+            background="#22c55e",       # Green fill
+            bordercolor="#202124",
+            lightcolor="#22c55e",
+            darkcolor="#22c55e"
         )
 
+        self.progress = ttk.Progressbar(
+            self.root,
+            mode="determinate",
+            style="Green.Horizontal.TProgressbar"
+        )
         self.progress.pack(
             fill="x",
             padx=10,
@@ -315,7 +324,11 @@ class UpdateGUI:
             background="#292b36"
         )
 
-
+        self.tree.tag_configure(
+            "new",
+            background="#1f6f3d",   # green
+            foreground="white"
+        )
         self.tree.bind(
             "<Double-1>",
             self.open_selected
@@ -455,6 +468,7 @@ class UpdateGUI:
 
 
         new_updates = []
+        self.new_updates.clear()
 
 
 
@@ -466,12 +480,9 @@ class UpdateGUI:
                 update["update_date"]
             )
 
-
             if identifier not in old_updates:
-
-                new_updates.append(
-                    update
-                )
+                new_updates.append(update)
+                self.new_updates.add(identifier)
 
 
 
@@ -602,11 +613,20 @@ class UpdateGUI:
 
 
 
-            tag = (
-                "even"
-                if count % 2 == 0
-                else "odd"
+            identifier = (
+                update["lutris_name"],
+                update["title"],
+                update["update_date"]
             )
+
+            if identifier in self.new_updates:
+                tags = ("new",)
+            else:
+                tags = (
+                    "even",
+                ) if count % 2 == 0 else (
+                    "odd",
+                )
 
             description = update["description"].strip()
 
@@ -621,7 +641,7 @@ class UpdateGUI:
                 "",
                 "end",
                 iid=str(index),
-                tags=(tag,),
+                tags=tags,
                 values=(
                     game_name,
                     self.format_date(update["update_date"]),

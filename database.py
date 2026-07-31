@@ -255,6 +255,17 @@ class Database:
 
             cursor.execute(
                 """
+                DELETE FROM news
+                WHERE game_id=?
+                """,
+                (
+                    game_id,
+                )
+            )
+
+
+            cursor.execute(
+                """
                 UPDATE games
 
                 SET hidden=1
@@ -334,6 +345,17 @@ class Database:
                     cursor.execute(
                         """
                         DELETE FROM updates
+                        WHERE game_id=?
+                        """,
+                        (
+                            game["id"],
+                        )
+                    )
+
+
+                    cursor.execute(
+                        """
+                        DELETE FROM news
                         WHERE game_id=?
                         """,
                         (
@@ -495,6 +517,60 @@ class Database:
 
 
 
+    def save_title(
+            self,
+            update_id,
+            title
+    ):
+
+        with self.lock:
+
+            self.connection.execute(
+                """
+                UPDATE updates
+
+                SET title=?
+
+                WHERE id=?
+                """,
+                (
+                    title,
+                    update_id
+                )
+            )
+
+
+            self.connection.commit()
+
+
+
+    def save_description(
+            self,
+            update_id,
+            description
+    ):
+
+        with self.lock:
+
+            self.connection.execute(
+                """
+                UPDATE updates
+
+                SET description=?
+
+                WHERE id=?
+                """,
+                (
+                    description,
+                    update_id
+                )
+            )
+
+
+            self.connection.commit()
+
+
+
     def save_notes(
             self,
             update_id,
@@ -581,6 +657,184 @@ class Database:
                     ON games.id=updates.game_id
 
                     WHERE games.hidden=0
+
+                    ORDER BY update_date DESC
+                    """
+                )
+
+
+
+            return cursor.fetchall()
+
+
+
+    # ----------------------------
+    # News
+    #
+    # Stored separately from SteamDB "updates" since the two come
+    # from different Steam endpoints and shouldn't mix in the same
+    # table. Unlike updates, the full cleaned text is already known
+    # at insert time (no lazy notes fetch needed), so it's written
+    # into both description and notes right away.
+    # ----------------------------
+
+
+    def save_news(
+            self,
+            game_id,
+            title,
+            description,
+            date,
+            link
+    ):
+
+        with self.lock:
+
+            cursor = self.connection.cursor()
+
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO news
+                (
+                    game_id,
+                    title,
+                    description,
+                    update_date,
+                    link,
+                    notes
+                )
+                VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    game_id,
+                    title,
+                    description,
+                    date,
+                    link,
+                    description
+                )
+            )
+
+            inserted = cursor.rowcount > 0
+
+            self.connection.commit()
+
+
+            cursor.execute(
+                """
+                SELECT id
+                FROM news
+                WHERE game_id=? AND link=?
+                """,
+                (
+                    game_id,
+                    link
+                )
+            )
+
+            row = cursor.fetchone()
+
+
+            return {
+                "id": row["id"] if row else None,
+                "inserted": inserted
+            }
+
+
+
+    def get_news(
+            self,
+            game_id=None
+    ):
+
+        with self.lock:
+
+            cursor = self.connection.cursor()
+
+
+
+            if game_id:
+
+
+                cursor.execute(
+                    """
+                    SELECT
+                        games.lutris_name,
+                        games.steam_appid,
+                        games.steam_rating_text,
+                        games.steam_rating_percent,
+                        news.*
+
+                    FROM news
+
+                    JOIN games
+
+                    ON games.id=news.game_id
+
+                    WHERE games.id=?
+                    AND games.hidden=0
+
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM updates
+                        WHERE updates.game_id=news.game_id
+                        AND (
+                            (
+                                updates.description=news.title
+                                AND updates.description!=''
+                            )
+                            OR
+                            (
+                                updates.description=news.description
+                                AND updates.description!=''
+                            )
+                        )
+                    )
+
+                    ORDER BY update_date DESC
+                    """,
+                    (
+                        game_id,
+                    )
+                )
+
+
+            else:
+
+
+                cursor.execute(
+                    """
+                    SELECT
+                        games.lutris_name,
+                        games.steam_appid,
+                        games.steam_rating_text,
+                        games.steam_rating_percent,
+                        news.*
+
+                    FROM news
+
+                    JOIN games
+
+                    ON games.id=news.game_id
+
+                    WHERE games.hidden=0
+
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM updates
+                        WHERE updates.game_id=news.game_id
+                        AND (
+                            (
+                                updates.description=news.title
+                                AND updates.description!=''
+                            )
+                            OR
+                            (
+                                updates.description=news.description
+                                AND updates.description!=''
+                            )
+                        )
+                    )
 
                     ORDER BY update_date DESC
                     """

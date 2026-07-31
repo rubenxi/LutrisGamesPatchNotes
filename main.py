@@ -61,8 +61,14 @@ def refresh():
         state="disabled"
     )
 
+    gui.news_check.config(
+        state="disabled"
+    )
+
 
     gui.log(
+        "📰 Starting news check..."
+        if gui.news_mode else
         "🚀 Starting update check..."
     )
 
@@ -295,10 +301,79 @@ def run_refresh():
 
 
             # -------------------------
-            # SteamDB updates
+            # SteamDB updates / Steam news
             # -------------------------
 
-            if game["steam_appid"]:
+            if game["steam_appid"] and gui.news_mode:
+
+
+                ensure_image_cached(
+                    game["steam_appid"]
+                )
+
+
+                gui.log(
+                    "  📰 Checking Steam news..."
+                )
+
+
+                # One request gets every news item's full text
+                # directly, so unlike the updates flow there's no
+                # separate lazy notes fetch needed here.
+
+                news_items = steam.get_news_items(
+                    game["steam_appid"]
+                )
+
+
+                for item in news_items:
+
+
+                    notes = clean_bbcode(
+                        item["contents"]
+                    )
+
+
+                    for image_url in extract_note_image_urls(notes):
+
+                        ensure_note_image_cached(
+                            image_url
+                        )
+
+
+                    result = database.save_news(
+                        game_id,
+                        item["title"],
+                        notes,
+                        item["date"],
+                        item["link"]
+                    )
+
+
+                    if result["inserted"]:
+
+                        identifier = (
+                            name,
+                            item["title"],
+                            item["date"],
+                        )
+
+                        gui.root.after(
+                            0,
+                            lambda i=identifier, n=name, t=item["title"]:
+                                (
+                                    gui.new_updates.add(i),
+                                    notify_new_update(n, t),
+                                )
+                        )
+
+
+                database.set_checked(
+                    game_id
+                )
+
+
+            elif game["steam_appid"]:
 
 
                 ensure_image_cached(
@@ -325,10 +400,22 @@ def run_refresh():
                 for update in updates:
 
 
+                    description = (update["description"] or "").strip()
+
+
+                    if description.startswith("SteamDB Build"):
+
+                        # No real patch-note content, just a build
+                        # bump - skip it entirely rather than
+                        # saving it.
+
+                        continue
+
+
                     result = database.save_update(
                         game_id,
                         update["title"],
-                        update["description"],
+                        description,
                         update["date"],
                         update["link"]
                     )
@@ -454,6 +541,10 @@ def run_refresh():
 
 
         gui.refresh_button.config(
+            state="normal"
+        )
+
+        gui.news_check.config(
             state="normal"
         )
 

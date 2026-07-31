@@ -835,6 +835,7 @@ class UpdateGUI:
         self.updates = []
         self.new_updates = set()
         self.photo_cache = {}
+        self.news_mode = False
         self.create_widgets()
 
 
@@ -893,7 +894,7 @@ class UpdateGUI:
             background=PANEL_BG,
             foreground="#eeeeee",
             fieldbackground=PANEL_BG,
-            rowheight=75,
+            rowheight=110,
             font=(
                 "Segoe UI",
                 15
@@ -909,7 +910,7 @@ class UpdateGUI:
             borderwidth=0,
             font=(
                 "Segoe UI",
-                11,
+                15,
                 "bold"
             )
         )
@@ -960,6 +961,38 @@ class UpdateGUI:
         )
 
         self.refresh_button.pack(
+            side="left",
+            padx=10
+        )
+
+
+
+        self.news_mode_var = tk.BooleanVar(
+            value=False
+        )
+
+        self.news_check = tk.Checkbutton(
+            top,
+            text=" 📰 Steam News ",
+            variable=self.news_mode_var,
+            command=self.toggle_news_mode,
+            bg=BG,
+            fg=ACCENT,
+            activebackground=BG,
+            activeforeground=ACCENT,
+            selectcolor=PANEL_BG_ALT,
+            disabledforeground="#4b5563",
+            font=(
+                "Segoe UI",
+                12,
+                "bold"
+            ),
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2"
+        )
+
+        self.news_check.pack(
             side="left",
             padx=10
         )
@@ -1093,8 +1126,8 @@ class UpdateGUI:
 
         self.tree.column(
             "#0",
-            width=190,
-            minwidth=190,
+            width=260,
+            minwidth=260,
             stretch=False,
             anchor="center"
         )
@@ -1472,10 +1505,32 @@ class UpdateGUI:
         self.new_updates.clear()
 
         self.log(
+            "📰 Starting news check..."
+            if self.news_mode else
             "🚀 Starting update check..."
         )
 
         self.refresh_callback()
+
+
+    # ------------------------------------------------
+    # Updates / News toggle
+    # ------------------------------------------------
+
+    def toggle_news_mode(self):
+
+        self.news_mode = self.news_mode_var.get()
+
+
+        self.tree.heading(
+            "description",
+            text="📰 News" if self.news_mode else "💡 Information"
+        )
+
+
+        self.hide_details()
+
+        self.load_updates()
 
 
     # ------------------------------------------------
@@ -1513,8 +1568,8 @@ class UpdateGUI:
 
             image.thumbnail(
                 (
-                    160,
-                    60
+                    230,
+                    95
                 )
             )
 
@@ -1564,6 +1619,8 @@ class UpdateGUI:
 
 
         self.updates = list(
+            self.database.get_news()
+            if self.news_mode else
             self.database.get_updates()
         )
 
@@ -1630,15 +1687,21 @@ class UpdateGUI:
                     "odd",
                 )
 
-            description = update["description"].strip()
+            description = (update["description"] or "").strip()
 
-            important = not description.startswith("SteamDB Build")
+            description = " ".join(description.split())
 
-            if important:
+            if self.news_mode:
+
+                description = (update["title"] or "").strip()
+
+                game_name = update["lutris_name"]
+
+            else:
+
                 description = "🚀 " + description
                 game_name = update["lutris_name"] + " 🌟"
-            else:
-                game_name = update["lutris_name"]
+
             photo = self.get_photo(
                 update["steam_appid"]
             )
@@ -1662,7 +1725,7 @@ class UpdateGUI:
 
 
         self.status.config(
-            text=f"🌱 {count} updates found"
+            text=f"🌱 {count} {'news items' if self.news_mode else 'updates'} found"
         )
 
 

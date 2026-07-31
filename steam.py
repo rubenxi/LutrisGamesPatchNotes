@@ -5,7 +5,7 @@ import re
 import html
 import difflib
 import xml.etree.ElementTree as ET
-from email.utils import parsedate_to_datetime
+from email.utils import parsedate_to_datetime, formatdate
 from bs4 import BeautifulSoup
 from gui import UpdateGUI
 
@@ -391,6 +391,83 @@ def find_matching_news(
 
 
     return None
+
+
+
+# SteamDB's RSS titles carry trailing annotations that aren't part
+# of the actual patch-note title, e.g.:
+#   "Ver.1.0.0.2 Update (Steam®) (SteamDB Build 21218748)"
+# Both markers are stripped (in whichever order/combination they
+# appear) so what's saved is just the post's real title, e.g.:
+#   "Ver.1.0.0.2 Update"
+# This also makes update titles comparable against official Steam
+# news titles, which never carry these suffixes to begin with.
+
+_TITLE_SUFFIX_PATTERN = re.compile(
+    r"\s*\((?:Steam®|SteamDB Build \d+)\)\s*$"
+)
+
+
+def clean_update_title(title):
+
+    if not title:
+        return title
+
+
+    original = title
+
+
+    while True:
+
+        new_title = _TITLE_SUFFIX_PATTERN.sub(
+            "",
+            title
+        )
+
+
+        if new_title == title:
+            break
+
+
+        title = new_title
+
+
+    cleaned = title.strip()
+
+
+    # If stripping the suffix would leave nothing behind (the whole
+    # string WAS just "(SteamDB Build 12345)" with no real title/
+    # description in front of it), keep the original text instead -
+    # better to still show the build tag than to save/display an
+    # empty row.
+    if not cleaned:
+        return original.strip()
+
+
+    return cleaned
+
+
+
+def format_news_date(timestamp):
+
+    """
+    Official news items give their date as a unix timestamp, while
+    SteamDB RSS updates give theirs as an RFC822 string. Converting
+    here means the "news" table can reuse the exact same date
+    parsing/sorting/formatting code the GUI already has for
+    "updates", with no branching needed there.
+    """
+
+    try:
+
+        return formatdate(
+            timestamp,
+            usegmt=True
+        )
+
+    except Exception:
+
+        return ""
 
 
 
@@ -867,6 +944,55 @@ class SteamClient:
 
 
     # ---------------------------------
+    # OFFICIAL NEWS, formatted for storage
+    #
+    # Reuses get_news_for_app (the same call already made to fetch
+    # full patch-notes text for SteamDB updates) instead of hitting
+    # a separate endpoint - one request per game either way.
+    # ---------------------------------
+
+    def get_news_items(
+            self,
+            appid
+    ):
+
+        items = self.get_news_for_app(
+            appid
+        )
+
+
+        return [
+
+            {
+
+                "title": item.get(
+                    "title",
+                    ""
+                ),
+
+                "contents": item.get(
+                    "contents",
+                    ""
+                ),
+
+                "date": format_news_date(
+                    item.get("date")
+                ),
+
+                "link": item.get(
+                    "url",
+                    ""
+                ),
+
+            }
+
+            for item in items
+
+        ]
+
+
+
+    # ---------------------------------
     # STEAMDB UPDATES
     # ---------------------------------
 
@@ -986,18 +1112,22 @@ class SteamClient:
 
                     "title":
 
-                    item.findtext(
-                        "title",
-                        ""
+                    clean_update_title(
+                        item.findtext(
+                            "title",
+                            ""
+                        )
                     ),
 
 
 
                     "description":
 
-                    item.findtext(
-                        "description",
-                        ""
+                    clean_update_title(
+                        item.findtext(
+                            "description",
+                            ""
+                        )
                     ),
 
 

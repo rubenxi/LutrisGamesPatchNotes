@@ -35,6 +35,25 @@ CREATE TABLE IF NOT EXISTS updates (
 );
 
 
+CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    game_id INTEGER NOT NULL,
+
+    title TEXT,
+    description TEXT,
+    update_date TEXT,
+    link TEXT,
+    notes TEXT,
+
+    UNIQUE(game_id, link),
+
+    FOREIGN KEY(game_id)
+        REFERENCES games(id)
+        ON DELETE CASCADE
+);
+
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
